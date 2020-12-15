@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
@@ -23,17 +22,19 @@ public class Sources {
     }
     
     public interface Parse {
-        public List<String> process(String t, Object obj);
+        public List<ProxyClass> process(String t, Object obj);
     }
     
     public class Source{
+        String name;
         int interval;
         String url;
         boolean go = false;
         Parse parse;
         boolean json = false;
 
-        public Source(String url, int interval, boolean json, Parse parse){
+        public Source(String name, String url, int interval, boolean json, Parse parse){
+            this.name = name;
             this.interval = interval;
             this.url = url;
             this.parse = parse;
@@ -51,7 +52,7 @@ public class Sources {
                     sb.append(line).append("\n");
                 }
             } catch (IOException ex) {
-                Logger.getLogger(Proxies.class.getName()).log(Level.SEVERE, null, ex);
+                //Logger.getLogger(Proxies.class.getName()).log(Level.SEVERE, null, ex);
                 return null;
             }
             return sb.toString();
@@ -62,7 +63,7 @@ public class Sources {
             try {
                 obj = JsonParser.any().from(doc);
             } catch (JsonParserException ex) {
-                Logger.getLogger(Sources.class.getName()).log(Level.SEVERE, null, ex);
+                //Logger.getLogger(Sources.class.getName()).log(Level.SEVERE, null, ex);
             }
             return obj;
         }
@@ -72,11 +73,12 @@ public class Sources {
                 @Override
                 public void run(){
                     while(go){
+                        System.out.println("refreshing " + name);
                         String doc = getDoc();
+                        if(doc == null)continue;
                         Object obj = null;
-                        List<String> proxies;
                         if(json) obj = getJSON(doc);
-                        proxies = parse.process(doc, obj);
+                        List<ProxyClass> proxies = parse.process(doc, obj);
                         addProxies(proxies);
 //                        System.out.println("Thread-" + Thread.currentThread().getId());
 //                        System.out.println(proxies);
@@ -99,27 +101,20 @@ public class Sources {
     protected final LinkedHashMap<String, Source> sources = new LinkedHashMap<>();
     
     public void addSource(String name, String url, int interval, boolean json, Parse p){
-        addSource(name, new Source(url, interval, json, p));
+        addSource(name, new Source(name, url, interval, json, p));
     }
     
     public void addSource(String name, Source s){
         sources.put(name, s);
     }
     
-    public void addProxies(List<String> list){
-        synchronized(p.proxies){
-            for(String e : list){
-                String[] parts = e.split("\\|");
-                String key = parts.length > 1 ? parts[1] : "all";
-                String proxy = parts[0];
-                if(p.proxies.containsKey(key)){
-                    p.proxies.get(key).add(proxy);
-                }else{
-                    p.proxies.put(key, new HashSet<>());
-                    p.proxies.get(key).add(proxy);
-                }
+    public void addProxies(List<ProxyClass> list){
+        //synchronized(p.proxies){
+            for(ProxyClass e : list){
+                String key = e.proxy;
+                p.proxies.put(key, e); //?updating information if different from duplicate proxies
             }
-        }
+        //}
     }
     
     public void startAll(){
